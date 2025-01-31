@@ -1,2 +1,0 @@
-# haystack-rag
-haystack-rag

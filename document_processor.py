@@ -1,0 +1,158 @@
+import hashlib
+import json
+import os
+from pathlib import Path
+from typing import Dict, Set
+
+from dotenv import load_dotenv
+from haystack import Pipeline
+from haystack.components.converters import (
+    MarkdownToDocument,
+    PyPDFToDocument,
+    TextFileToDocument,
+)
+from haystack.components.embedders import SentenceTransformersDocumentEmbedder
+from haystack.components.joiners import DocumentJoiner
+from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
+from haystack.components.routers import FileTypeRouter
+from haystack.components.writers import DocumentWriter
+from haystack.utils import Secret
+from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from qdrant_client.http import models
+
+from config import DocumentProcessingConfig
+
+load_dotenv()
+
+
+class DocumentProcessor:
+    def __init__(self, config: DocumentProcessingConfig):
+        self.config = config
+        self.document_store = QdrantDocumentStore(
+            # path=config.cache_dir,
+            url=os.getenv("QDRANT_URL"),
+            api_key=Secret.from_env_var("QDRANT_API_KEY"),
+            index="islamic_texts",
+            embedding_dim=384,
+            recreate_index=True,
+            quantization_config=models.ScalarQuantization(
+                scalar=models.ScalarQuantizationConfig(
+                    type=models.ScalarType.INT8,
+                    quantile=0.99,
+                    always_ram=True,
+                ),
+            ),
+        )
+        self._setup_pipeline()
+        self.file_tracking_path = Path("./.tracking") / "file_tracking.json"
+        self.file_tracking_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _setup_pipeline(self):
+        """Set up the processing pipeline."""
+        components = [
+            (
+                "router",
+                FileTypeRouter(
+                    mime_types=["text/plain", "application/pdf", "text/markdown"]
+                ),
+            ),
+            ("text_converter", TextFileToDocument()),
+            ("markdown_converter", MarkdownToDocument()),
+            ("pdf_converter", PyPDFToDocument()),
+            ("joiner", DocumentJoiner()),
+            ("cleaner", DocumentCleaner()),
+            (
+                "splitter",
+                DocumentSplitter(
+                    split_by="word",
+                    split_length=self.config.split_length,
+                    split_overlap=self.config.split_overlap,
+                ),
+            ),
+            (
+                "embedder",
+                SentenceTransformersDocumentEmbedder(
+                    model="sentence-transformers/all-MiniLM-L6-v2"
+                ),
+            ),
+            ("writer", DocumentWriter(self.document_store)),
+        ]
+
+        self.pipeline = Pipeline()
+        for name, component in components:
+            self.pipeline.add_component(instance=component, name=name)
+
+        self.pipeline.connect("router.text/plain", "text_converter.sources")
+        self.pipeline.connect("router.application/pdf", "pdf_converter.sources")
+        self.pipeline.connect("router.text/markdown", "markdown_converter.sources")
+        self.pipeline.connect("text_converter", "joiner")
+        self.pipeline.connect("pdf_converter", "joiner")
+        self.pipeline.connect("markdown_converter", "joiner")
+        self.pipeline.connect("joiner", "cleaner")
+        self.pipeline.connect("cleaner", "splitter")
+        self.pipeline.connect("splitter", "embedder")
+        self.pipeline.connect("embedder", "writer")
+
+    def _calculate_file_hash(self, file_path: Path) -> str:
+        """Calculate MD5 hash of a file."""
+        hash_md5 = hashlib.md5()
+        with open(file_path, "rb") as f:
+            for chunk in iter(lambda: f.read(4096), b""):
+                hash_md5.update(chunk)
+        return hash_md5.hexdigest()
+
+    def _load_file_tracking(self) -> Dict[str, str]:
+        """Load the file tracking information from JSON."""
+        if self.file_tracking_path.exists():
+            with open(self.file_tracking_path, "r") as f:
+                return json.load(f)
+        return {}
+
+    def _save_file_tracking(self, tracking_info: Dict[str, str]) -> None:
+        """Save the file tracking information to JSON."""
+        with open(self.file_tracking_path, "w") as f:
+            json.dump(tracking_info, f, indent=2)
+
+    def _get_changed_files(self, directory: Path) -> Set[Path]:
+        """Compare current files with tracked files and return changed or new files."""
+        current_files = {
+            file_path for file_path in directory.glob("**/*") if file_path.is_file()
+        }
+
+        tracked_files = self._load_file_tracking()
+        changed_files = set()
+
+        for file_path in current_files:
+            relative_path = str(file_path.relative_to(directory))
+            current_hash = self._calculate_file_hash(file_path)
+
+            if (
+                relative_path not in tracked_files
+                or tracked_files[relative_path] != current_hash
+            ):
+                changed_files.add(file_path)
+
+        return changed_files
+
+    def process_documents(self, directory: Path) -> bool:
+        """Process documents in the directory.
+
+        Returns True if any documents were processed."""
+        changed_files = self._get_changed_files(directory)
+
+        if not changed_files:
+            return False
+
+        self.pipeline.run({"router": {"sources": list(changed_files)}})
+
+        tracking_info = self._load_file_tracking()
+        for file_path in changed_files:
+            relative_path = str(file_path.relative_to(directory))
+            tracking_info[relative_path] = self._calculate_file_hash(file_path)
+
+        self._save_file_tracking(tracking_info)
+        return True
+
+    @property
+    def store(self):
+        return self.document_store
