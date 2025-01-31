@@ -29,9 +29,9 @@ class DocumentProcessor:
     def __init__(self, config: DocumentProcessingConfig):
         self.config = config
         self.document_store = QdrantDocumentStore(
-            # path=config.cache_dir,
-            url=os.getenv("QDRANT_URL"),
-            api_key=Secret.from_env_var("QDRANT_API_KEY"),
+            path=config.cache_dir,
+            # url=os.getenv("QDRANT_URL"),
+            # api_key=Secret.from_env_var("QDRANT_API_KEY"),
             index="islamic_texts",
             embedding_dim=384,
             recreate_index=True,
