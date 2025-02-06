@@ -1,6 +1,7 @@
 from pathlib import Path
 from typing import Any, Dict
 
+import torch
 from docling.chunking import DocChunk
 from haystack import Pipeline
 from haystack.components.builders import AnswerBuilder, PromptBuilder
@@ -11,6 +12,13 @@ from haystack.utils import ComponentDevice, Secret
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 
 from config import DocumentProcessingConfig
+
+
+def get_device():
+    """Helper function to determine the device to use."""
+    if torch.cuda.is_available():
+        return ComponentDevice.from_str("cuda:0")
+    return None
 
 
 class QueryEngine:
@@ -42,7 +50,7 @@ class QueryEngine:
                 "text_embedder",
                 SentenceTransformersTextEmbedder(
                     model=self.config.embedding_model,
-                    device=ComponentDevice.from_str("cuda:0"),
+                    device=get_device(),
                 ),
             ),
             (

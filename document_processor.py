@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from typing import Dict, Set
 
+import torch
 from dotenv import load_dotenv
 from haystack import Pipeline
 from haystack.components.converters import (
@@ -22,6 +23,13 @@ from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from config import DocumentProcessingConfig
 
 load_dotenv()
+
+
+def get_device():
+    """Helper function to determine the device to use."""
+    if torch.cuda.is_available():
+        return ComponentDevice.from_str("cuda:0")
+    return None
 
 
 class DocumentProcessor:
@@ -65,7 +73,7 @@ class DocumentProcessor:
                 "embedder",
                 SentenceTransformersDocumentEmbedder(
                     model=self.config.embedding_model,
-                    device=ComponentDevice.from_str("cuda:0"),
+                    device=get_device(),
                 ),
             ),
             ("writer", DocumentWriter(self.document_store)),
