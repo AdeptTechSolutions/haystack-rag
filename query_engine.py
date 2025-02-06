@@ -47,7 +47,7 @@ class QueryEngine:
 
         components = [
             (
-                "text_embedder",
+                "embedder",
                 SentenceTransformersTextEmbedder(
                     model=self.config.embedding_model,
                     device=get_device(),
@@ -67,7 +67,7 @@ class QueryEngine:
         for name, component in components:
             self.pipeline.add_component(instance=component, name=name)
 
-        self.pipeline.connect("text_embedder.embedding", "retriever.query_embedding")
+        self.pipeline.connect("embedder.embedding", "retriever.query_embedding")
         self.pipeline.connect("retriever.documents", "ranker.documents")
         self.pipeline.connect("retriever", "prompt_builder.documents")
         self.pipeline.connect("prompt_builder", "llm")
@@ -78,7 +78,7 @@ class QueryEngine:
     def query(self, query: str) -> Dict[str, Any]:
         result = self.pipeline.run(
             {
-                "text_embedder": {"text": query},
+                "embedder": {"text": query},
                 "ranker": {"query": query, "top_k": self.config.top_k},
                 "prompt_builder": {"query": query},
                 "answer_builder": {"query": query},
