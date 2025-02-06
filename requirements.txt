@@ -1,5 +1,6 @@
 haystack-ai
 qdrant-haystack
+docling-haystack
 sentence-transformers>=3.0.0 
 huggingface_hub>=0.23.0
 markdown-it-py 
@@ -9,3 +10,5 @@ transformers[torch,sentencepiece]
 python-dotenv
 pymupdf
 streamlit
+trulens
+trulens-providers-openai

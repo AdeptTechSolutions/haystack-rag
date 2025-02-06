@@ -1,12 +1,13 @@
 from pathlib import Path
 from typing import Any, Dict
 
+from docling.chunking import DocChunk
 from haystack import Pipeline
 from haystack.components.builders import AnswerBuilder, PromptBuilder
 from haystack.components.embedders import SentenceTransformersTextEmbedder
 from haystack.components.generators import OpenAIGenerator
 from haystack.components.rankers import TransformersSimilarityRanker
-from haystack.utils import Secret
+from haystack.utils import ComponentDevice, Secret
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 
 from config import DocumentProcessingConfig
@@ -40,7 +41,8 @@ class QueryEngine:
             (
                 "text_embedder",
                 SentenceTransformersTextEmbedder(
-                    model="sentence-transformers/all-MiniLM-L6-v2"
+                    model=self.config.embedding_model,
+                    device=ComponentDevice.from_str("cuda:0"),
                 ),
             ),
             (

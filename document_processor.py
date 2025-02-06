@@ -16,9 +16,8 @@ from haystack.components.joiners import DocumentJoiner
 from haystack.components.preprocessors import DocumentCleaner, DocumentSplitter
 from haystack.components.routers import FileTypeRouter
 from haystack.components.writers import DocumentWriter
-from haystack.utils import Secret
+from haystack.utils import ComponentDevice, Secret
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
-from qdrant_client.http import models
 
 from config import DocumentProcessingConfig
 
@@ -29,19 +28,12 @@ class DocumentProcessor:
     def __init__(self, config: DocumentProcessingConfig):
         self.config = config
         self.document_store = QdrantDocumentStore(
-            path=config.cache_dir,
-            # url=os.getenv("QDRANT_URL"),
-            # api_key=Secret.from_env_var("QDRANT_API_KEY"),
+            # path=config.cache_dir,
+            url=os.getenv("QDRANT_URL"),
+            api_key=Secret.from_env_var("QDRANT_API_KEY"),
             index="islamic_texts",
             embedding_dim=384,
             recreate_index=True,
-            quantization_config=models.ScalarQuantization(
-                scalar=models.ScalarQuantizationConfig(
-                    type=models.ScalarType.INT8,
-                    quantile=0.99,
-                    always_ram=True,
-                ),
-            ),
         )
         self._setup_pipeline()
         self.file_tracking_path = Path("./.tracking") / "file_tracking.json"
@@ -72,7 +64,8 @@ class DocumentProcessor:
             (
                 "embedder",
                 SentenceTransformersDocumentEmbedder(
-                    model="sentence-transformers/all-MiniLM-L6-v2"
+                    model=self.config.embedding_model,
+                    device=ComponentDevice.from_str("cuda:0"),
                 ),
             ),
             ("writer", DocumentWriter(self.document_store)),
