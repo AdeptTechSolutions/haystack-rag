@@ -19,6 +19,7 @@ from haystack.components.routers import FileTypeRouter
 from haystack.components.writers import DocumentWriter
 from haystack.utils import ComponentDevice, Secret
 from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
+from qdrant_client import QdrantClient
 
 from config import DocumentProcessingConfig
 
@@ -35,17 +36,35 @@ def get_device():
 class DocumentProcessor:
     def __init__(self, config: DocumentProcessingConfig):
         self.config = config
-        self.document_store = QdrantDocumentStore(
-            path=config.cache_dir,
-            # url=os.getenv("QDRANT_URL"),
-            # api_key=Secret.from_env_var("QDRANT_API_KEY"),
-            index="islamic_texts",
-            embedding_dim=384,
-            recreate_index=False,
-        )
+        self.document_store = self._initialize_document_store()
         self._setup_pipeline()
         self.file_tracking_path = Path("./.tracking") / "file_tracking.json"
         self.file_tracking_path.parent.mkdir(parents=True, exist_ok=True)
+
+    def _initialize_document_store(self):
+        """Initialize QdrantDocumentStore with proper collection handling."""
+        qdrant_url = os.getenv("QDRANT_URL")
+        api_key = os.getenv("QDRANT_API_KEY")
+        collection_name = "islamic_texts"
+
+        client = QdrantClient(url=qdrant_url, api_key=api_key)
+        collections = client.get_collections().collections
+        collection_exists = any(col.name == collection_name for col in collections)
+
+        store = QdrantDocumentStore(
+            url=qdrant_url,
+            api_key=Secret.from_env_var("QDRANT_API_KEY"),
+            index=collection_name,
+            embedding_dim=768,
+            recreate_index=not collection_exists,
+        )
+
+        if collection_exists:
+            print(f"Using existing collection: {collection_name}")
+        else:
+            print(f"Creating new collection: {collection_name}")
+
+        return store
 
     def _setup_pipeline(self):
         """Set up the processing pipeline."""
