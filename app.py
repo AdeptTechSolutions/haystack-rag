@@ -56,6 +56,12 @@ def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
         st.error(f"Error displaying PDF page: {str(e)}")
 
 
+def get_pdf_download_link(filename: str) -> str:
+    """Generate the download link for the full PDF."""
+    base_url = "https://raw.githubusercontent.com/AdeptTechSolutions/haystack-rag/refs/heads/main/data_mini/"
+    return f"{base_url}{filename}"
+
+
 def main():
     st.set_page_config(
         page_title="Islamic Texts",
@@ -75,6 +81,10 @@ def main():
         st.stop()
 
     st.write("")
+
+    st.warning(
+        "⚠️ Please refer to the original book in case the answer given is incorrect or incomplete due to artificial intelligence."
+    )
 
     with st.form("query_form"):
         query = st.text_input(
@@ -125,6 +135,9 @@ def main():
                             source["page"],
                             st.session_state.path_config.temp_dir,
                         )
+
+                    download_link = get_pdf_download_link(source["source"])
+                    st.markdown(f"[📥 Download PDF]({download_link})")
                 else:
                     st.warning("⚠️ No specific source found for this response.")
 
