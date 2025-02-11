@@ -58,7 +58,7 @@ def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
 
 def get_pdf_download_link(filename: str) -> str:
     """Generate the download link for the full PDF."""
-    base_url = "https://raw.githubusercontent.com/AdeptTechSolutions/haystack-rag/refs/heads/main/data_mini/"
+    base_url = "https://raw.githubusercontent.com/AdeptTechSolutions/haystack-rag/refs/heads/main/data/"
     return f"{base_url}{filename}"
 
 
