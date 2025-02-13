@@ -15,8 +15,8 @@ from query_engine import QueryEngine
 def initialize_session():
     """Initialize session state variables"""
     if "initialized" not in st.session_state:
-        st.session_state.unique_authors = []
         st.session_state.initialized = False
+        st.session_state.unique_authors = []
 
         load_dotenv()
 
@@ -37,10 +37,7 @@ def initialize_session():
         st.session_state.doc_config = doc_config
         st.session_state.processor = processor
 
-        if processor.process_documents(path_config.data_dir):
-            st.sidebar.success("New or modified documents have been processed!")
-        else:
-            st.sidebar.info("No document changes detected.")
+        documents_processed = processor.process_documents(path_config.data_dir)
 
         authors_path = doc_config.tracking_dir / "authors.json"
         if authors_path.exists():
@@ -49,6 +46,8 @@ def initialize_session():
                 st.session_state.unique_authors = sorted(set(authors_data.values()))
 
         st.session_state.initialized = True
+
+        return documents_processed
 
 
 def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
@@ -113,6 +112,11 @@ def main():
         layout="wide",
         initial_sidebar_state="expanded",
     )
+    docs_processed = initialize_session()
+
+    if not st.session_state.initialized:
+        st.warning("Initializing application...")
+        st.stop()
 
     col1, col2, col3 = st.columns([1, 0.4, 1])
     with col2:
@@ -122,29 +126,27 @@ def main():
     with st.sidebar:
         st.markdown("## 📚 Filters")
 
-        if "initialized" in st.session_state and st.session_state.initialized:
-            selected_authors = st.multiselect(
-                "Select Authors:",
-                options=st.session_state.unique_authors,
-                key="author_filter",
-                help="Filter results by specific authors. Leave empty to show all.",
-            )
+        selected_authors = st.multiselect(
+            "Select Authors:",
+            options=st.session_state.unique_authors,
+            key="author_filter",
+            help="Filter results by specific authors. Leave empty to show all.",
+        )
 
-            st.markdown("### ℹ️ About")
-            st.markdown(
-                """
-                This application allows you to search through Islamic texts 
-                and receive relevant information from verified sources.
-                
-                Use the search bar above to ask questions or explore topics.
-                """
-            )
+        if docs_processed:
+            st.success("New or modified documents have been processed!")
+        else:
+            st.info("No document changes detected.")
 
-    initialize_session()
-
-    if not st.session_state.initialized:
-        st.warning("Initializing application...")
-        st.stop()
+        st.markdown("### ℹ️ About")
+        st.markdown(
+            """
+            This application allows you to search through Islamic texts 
+            and receive relevant information from verified sources.
+            
+            Use the search bar above to ask questions or explore topics.
+            """
+        )
 
     st.markdown("")
 
