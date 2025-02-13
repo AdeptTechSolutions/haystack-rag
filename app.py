@@ -15,7 +15,6 @@ from query_engine import QueryEngine
 def initialize_session():
     """Initialize session state variables"""
     if "initialized" not in st.session_state:
-        # Set default values for session state
         st.session_state.unique_authors = []
         st.session_state.initialized = False
 
@@ -39,11 +38,10 @@ def initialize_session():
         st.session_state.processor = processor
 
         if processor.process_documents(path_config.data_dir):
-            st.success("New or modified documents have been processed!")
+            st.sidebar.success("New or modified documents have been processed!")
         else:
-            st.info("No document changes detected.")
+            st.sidebar.info("No document changes detected.")
 
-        # Load authors after processing documents
         authors_path = doc_config.tracking_dir / "authors.json"
         if authors_path.exists():
             with open(authors_path, "r") as f:
@@ -59,7 +57,7 @@ def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
         page = doc[page_num - 1]
         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
 
-        img_path = temp_dir / "temp_page.png"
+        img_path = temp_dir / f"temp_page_{page_num}.png"
         pix.save(str(img_path))
 
         st.image(str(img_path), width=600)
@@ -76,18 +74,71 @@ def get_pdf_download_link(filename: str) -> str:
     return f"{base_url}{filename}"
 
 
+def display_source_information(source, path_config):
+    """Display source information in an organized manner"""
+    if source:
+        st.markdown("### 📄 Source Details")
+        st.info(
+            f"""
+            **Document:** {source['source']}  
+            **Page:** {source['page']}  
+            **Relevance Score:** {source['score']:.4f}
+            """
+        )
+
+        with st.expander("🔍 View Context", expanded=False):
+            st.markdown(source["content"])
+
+            st.markdown("#### 📑 Page Preview")
+            pdf_path = path_config.data_dir / source["source"]
+
+            col1, col2, col3 = st.columns([1, 1.5, 1])
+            with col2:
+                display_pdf_page(
+                    pdf_path,
+                    source["page"],
+                    path_config.temp_dir,
+                )
+
+                download_link = get_pdf_download_link(source["source"])
+                st.markdown(f"[📥 Download Complete PDF]({download_link})")
+    else:
+        st.warning("⚠️ No source information available for this result.")
+
+
 def main():
     st.set_page_config(
-        page_title="Islamic Texts",
+        page_title="Islamic RAG",
         page_icon="🔍",
-        layout="centered",
-        initial_sidebar_state="collapsed",
+        layout="wide",
+        initial_sidebar_state="expanded",
     )
 
-    st.markdown(
-        "<h1 style='text-align: center;'>📚 Islamic Texts</h1>",
-        unsafe_allow_html=True,
-    )
+    col1, col2, col3 = st.columns([1, 0.4, 1])
+    with col2:
+        logo = Image.open("resources/logo.png")
+        st.image(logo, use_container_width=True)
+
+    with st.sidebar:
+        st.markdown("## 📚 Filters")
+
+        if "initialized" in st.session_state and st.session_state.initialized:
+            selected_authors = st.multiselect(
+                "Select Authors:",
+                options=st.session_state.unique_authors,
+                key="author_filter",
+                help="Filter results by specific authors. Leave empty to show all.",
+            )
+
+            st.markdown("### ℹ️ About")
+            st.markdown(
+                """
+                This application allows you to search through Islamic texts 
+                and receive relevant information from verified sources.
+                
+                Use the search bar above to ask questions or explore topics.
+                """
+            )
 
     initialize_session()
 
@@ -95,26 +146,17 @@ def main():
         st.warning("Initializing application...")
         st.stop()
 
-    st.write("")
-
-    st.warning(
-        "⚠️ Please refer to the original book in case the answer given is incorrect or incomplete due to artificial intelligence."
-    )
+    st.markdown("")
 
     with st.form("query_form"):
         query = st.text_input(
             "Enter your question:",
-            placeholder="Ask a question about the documents...",
+            placeholder="Ask a question about the Islamic texts...",
         )
-        selected_authors = st.multiselect(
-            "Filter by authors (select none to show all):",
-            options=st.session_state.unique_authors,
-            key="author_filter",
-        )
-        submit_button = st.form_submit_button("Generate response")
+        submit_button = st.form_submit_button("🔍 Search")
 
     if submit_button and query:
-        with st.spinner("Generating response..."):
+        with st.spinner("Searching through texts..."):
             filters = None
             if selected_authors:
                 filters = {
@@ -125,48 +167,27 @@ def main():
             query_engine = QueryEngine(
                 st.session_state.processor.store, st.session_state.doc_config
             )
-            result = query_engine.query(query, filters)
+            results = query_engine.query(query, filters)
 
-            st.write("#### Answer")
-            st.write(result["answer"])
+            st.markdown("#### 📝 Answer")
+            st.write(results["answer"])
 
-            st.write("")
+            st.markdown("#### 📚 Sources")
 
-            with st.expander("📑 Source Information", expanded=False):
-                source = result["source"]
-                if source:
-                    st.info(
-                        """
-                        ```
-                        Document: {}
-                        Page: {}
-                        Relevance Score: {:.4f}
-                        ```
-                        """.format(
-                            source["source"], source["page"], source["score"]
-                        )
-                    )
+            # if "sources": [] is empty, dont render tabs
+            if not results["sources"]:
+                st.warning("⚠️ No sources found for this query.")
 
-                    st.info("**Context**")
-                    st.markdown(f"{source['content']}")
+            else:
+                tabs = st.tabs(["Source 1", "Source 2", "Source 3"])
 
-                    st.info("**Page Preview**")
+                st.warning(
+                    "⚠️ Please refer to the original sources for verification. AI-generated responses may be incomplete or incorrect."
+                )
 
-                    col1, col2, col3 = st.columns([1, 2, 1])
-                    with col2:
-                        pdf_path = (
-                            st.session_state.path_config.data_dir / source["source"]
-                        )
-                        display_pdf_page(
-                            pdf_path,
-                            source["page"],
-                            st.session_state.path_config.temp_dir,
-                        )
-
-                    download_link = get_pdf_download_link(source["source"])
-                    st.markdown(f"[📥 Download PDF]({download_link})")
-                else:
-                    st.warning("⚠️ No specific source found for this response.")
+                for idx, (tab, source) in enumerate(zip(tabs, results["sources"][:3])):
+                    with tab:
+                        display_source_information(source, st.session_state.path_config)
 
 
 if __name__ == "__main__":

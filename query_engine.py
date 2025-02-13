@@ -55,9 +55,16 @@ class QueryEngine:
             ),
             (
                 "retriever",
-                QdrantEmbeddingRetriever(document_store=self.document_store),
+                QdrantEmbeddingRetriever(
+                    document_store=self.document_store, top_k=self.config.top_k
+                ),
             ),
-            ("ranker", TransformersSimilarityRanker(model=self.config.ranker_model)),
+            (
+                "ranker",
+                TransformersSimilarityRanker(
+                    model=self.config.ranker_model, top_k=self.config.top_k
+                ),
+            ),
             ("prompt_builder", PromptBuilder(template=prompt_template)),
             ("llm", OpenAIGenerator(api_key=Secret.from_env_var("OPENAI_API_KEY"))),
             ("answer_builder", AnswerBuilder()),
@@ -75,6 +82,18 @@ class QueryEngine:
         self.pipeline.connect("llm.meta", "answer_builder.meta")
         self.pipeline.connect("retriever", "answer_builder.documents")
 
+    def _process_context(self, context) -> Dict[str, Any]:
+        """Process a single context document into a source information dictionary."""
+        if not context:
+            return None
+
+        return {
+            "source": Path(context.meta["file_path"]).name,
+            "page": context.meta.get("page_number", 1),
+            "score": context.score if hasattr(context, "score") else 0.0,
+            "content": context.content,
+        }
+
     def query(self, query: str, filters: dict = None) -> Dict[str, Any]:
         result = self.pipeline.run(
             {
@@ -89,15 +108,13 @@ class QueryEngine:
         answer = result["answer_builder"]["answers"][0].data
         contexts = result["ranker"]["documents"]
 
-        top_context = contexts[0] if contexts else None
+        if not contexts:
+            return {"answer": "No relevant information found.", "sources": []}
+        else:
+            source_infos = [
+                self._process_context(context)
+                for context in contexts[:3]
+                if context is not None
+            ]
 
-        source_info = None
-        if top_context:
-            source_info = {
-                "source": Path(top_context.meta["file_path"]).name,
-                "page": top_context.meta.get("page_number", 1),
-                "score": top_context.score if hasattr(top_context, "score") else 0.0,
-                "content": top_context.content,
-            }
-
-        return {"answer": answer, "source": source_info}
+            return {"answer": answer, "sources": source_infos}
