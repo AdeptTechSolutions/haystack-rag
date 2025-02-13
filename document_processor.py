@@ -71,9 +71,9 @@ class DocumentProcessor:
         collection_exists = any(col.name == collection_name for col in collections)
 
         store = QdrantDocumentStore(
-            path=self.config.cache_dir,
-            # url=qdrant_url,
-            # api_key=Secret.from_env_var("QDRANT_API_KEY"),
+            # path=self.config.cache_dir,
+            url=qdrant_url,
+            api_key=Secret.from_env_var("QDRANT_API_KEY"),
             index=collection_name,
             embedding_dim=768,
             recreate_index=not collection_exists,
