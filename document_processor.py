@@ -2,11 +2,11 @@ import hashlib
 import json
 import os
 from pathlib import Path
-from typing import Dict, Set
+from typing import Dict, List, Set
 
 import torch
 from dotenv import load_dotenv
-from haystack import Pipeline
+from haystack import Document, Pipeline, component
 from haystack.components.converters import (
     MarkdownToDocument,
     PyPDFToDocument,
@@ -23,6 +23,24 @@ from qdrant_client import QdrantClient
 
 from config import DocumentProcessingConfig
 
+
+@component
+class MetadataEnricher:
+    def __init__(self, authors: Dict[str, str]):
+        self.authors = authors
+
+    @component.output_types(documents=List[Document])
+    def run(self, documents: List[Document]):
+        for doc in documents:
+            file_path = doc.meta.get("file_path")
+            if file_path:
+                filename = Path(file_path).name
+                author = self.authors.get(filename)
+                if author:
+                    doc.meta["author"] = author
+        return {"documents": documents}
+
+
 load_dotenv()
 
 
@@ -37,6 +55,7 @@ class DocumentProcessor:
     def __init__(self, config: DocumentProcessingConfig):
         self.config = config
         self.document_store = self._initialize_document_store()
+        self.authors = self._load_authors()
         self._setup_pipeline()
         self.file_tracking_path = Path("./.tracking") / "file_tracking.json"
         self.file_tracking_path.parent.mkdir(parents=True, exist_ok=True)
@@ -52,8 +71,9 @@ class DocumentProcessor:
         collection_exists = any(col.name == collection_name for col in collections)
 
         store = QdrantDocumentStore(
-            url=qdrant_url,
-            api_key=Secret.from_env_var("QDRANT_API_KEY"),
+            path=self.config.cache_dir,
+            # url=qdrant_url,
+            # api_key=Secret.from_env_var("QDRANT_API_KEY"),
             index=collection_name,
             embedding_dim=768,
             recreate_index=not collection_exists,
@@ -67,7 +87,6 @@ class DocumentProcessor:
         return store
 
     def _setup_pipeline(self):
-        """Set up the processing pipeline."""
         components = [
             (
                 "router",
@@ -79,6 +98,7 @@ class DocumentProcessor:
             ("markdown_converter", MarkdownToDocument()),
             ("pdf_converter", PyPDFToDocument()),
             ("joiner", DocumentJoiner()),
+            ("enricher", MetadataEnricher(authors=self.authors)),
             ("cleaner", DocumentCleaner()),
             (
                 "splitter",
@@ -93,6 +113,7 @@ class DocumentProcessor:
                 SentenceTransformersDocumentEmbedder(
                     model=self.config.embedding_model,
                     device=get_device(),
+                    meta_fields_to_embed=["author"],
                 ),
             ),
             ("writer", DocumentWriter(self.document_store)),
@@ -108,7 +129,8 @@ class DocumentProcessor:
         self.pipeline.connect("text_converter", "joiner")
         self.pipeline.connect("pdf_converter", "joiner")
         self.pipeline.connect("markdown_converter", "joiner")
-        self.pipeline.connect("joiner", "cleaner")
+        self.pipeline.connect("joiner", "enricher")
+        self.pipeline.connect("enricher", "cleaner")
         self.pipeline.connect("cleaner", "splitter")
         self.pipeline.connect("splitter", "embedder")
         self.pipeline.connect("embedder", "writer")
@@ -153,6 +175,13 @@ class DocumentProcessor:
                 changed_files.add(file_path)
 
         return changed_files
+
+    def _load_authors(self) -> Dict[str, str]:
+        authors_path = self.config.tracking_dir / "authors.json"
+        if authors_path.exists():
+            with open(authors_path, "r") as f:
+                return json.load(f)
+        return {}
 
     def process_documents(self, directory: Path) -> bool:
         """Process documents in the directory.

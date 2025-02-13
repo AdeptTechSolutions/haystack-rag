@@ -75,10 +75,11 @@ class QueryEngine:
         self.pipeline.connect("llm.meta", "answer_builder.meta")
         self.pipeline.connect("retriever", "answer_builder.documents")
 
-    def query(self, query: str) -> Dict[str, Any]:
+    def query(self, query: str, filters: dict = None) -> Dict[str, Any]:
         result = self.pipeline.run(
             {
                 "embedder": {"text": query},
+                "retriever": {"filters": filters},
                 "ranker": {"query": query, "top_k": self.config.top_k},
                 "prompt_builder": {"query": query},
                 "answer_builder": {"query": query},

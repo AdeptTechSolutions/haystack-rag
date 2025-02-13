@@ -1,3 +1,4 @@
+import json
 import os
 from pathlib import Path
 
@@ -12,7 +13,12 @@ from query_engine import QueryEngine
 
 
 def initialize_session():
+    """Initialize session state variables"""
     if "initialized" not in st.session_state:
+        # Set default values for session state
+        st.session_state.unique_authors = []
+        st.session_state.initialized = False
+
         load_dotenv()
 
         path_config = PathConfig()
@@ -31,12 +37,20 @@ def initialize_session():
         st.session_state.path_config = path_config
         st.session_state.doc_config = doc_config
         st.session_state.processor = processor
-        st.session_state.initialized = True
 
         if processor.process_documents(path_config.data_dir):
             st.success("New or modified documents have been processed!")
         else:
             st.info("No document changes detected.")
+
+        # Load authors after processing documents
+        authors_path = doc_config.tracking_dir / "authors.json"
+        if authors_path.exists():
+            with open(authors_path, "r") as f:
+                authors_data = json.load(f)
+                st.session_state.unique_authors = sorted(set(authors_data.values()))
+
+        st.session_state.initialized = True
 
 
 def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
@@ -78,6 +92,7 @@ def main():
     initialize_session()
 
     if not st.session_state.initialized:
+        st.warning("Initializing application...")
         st.stop()
 
     st.write("")
@@ -91,14 +106,26 @@ def main():
             "Enter your question:",
             placeholder="Ask a question about the documents...",
         )
+        selected_authors = st.multiselect(
+            "Filter by authors (select none to show all):",
+            options=st.session_state.unique_authors,
+            key="author_filter",
+        )
         submit_button = st.form_submit_button("Generate response")
 
     if submit_button and query:
         with st.spinner("Generating response..."):
+            filters = None
+            if selected_authors:
+                filters = {
+                    "field": "meta.author",
+                    "operator": "in",
+                    "value": selected_authors,
+                }
             query_engine = QueryEngine(
                 st.session_state.processor.store, st.session_state.doc_config
             )
-            result = query_engine.query(query)
+            result = query_engine.query(query, filters)
 
             st.write("#### Answer")
             st.write(result["answer"])

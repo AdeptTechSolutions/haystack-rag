@@ -16,6 +16,7 @@ class DocumentProcessingConfig:
 
 @dataclass
 class PathConfig:
-    data_dir: Path = Path("data")
+    data_dir: Path = Path("data_mini")
     temp_dir: Path = Path("temp")
+    tracking_dir: Path = Path("./.tracking")
     resources_dir: Path = Path("resources")
