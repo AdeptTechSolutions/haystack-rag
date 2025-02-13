@@ -1,0 +1,34 @@
+[theme]
+# Primary colors
+primaryColor = "#0c4c56"             # Deep teal
+secondaryBackgroundColor = "#f0f2f6" # Light gray background
+backgroundColor = "#ffffff"          # White background
+textColor = "#31333F"                # Dark gray text
+
+# Accent color
+accentColor = "#b38837" # Gold accent
+
+# Font settings
+font = "sans serif"
+
+[server]
+# Enables light mode by default
+enableXsrfProtection = true
+enableCORS = false
+
+[browser]
+gatherUsageStats = false
+
+[client]
+# Forces light mode
+toolbarMode = "auto"
+showErrorDetails = true
+
+[runner]
+# Optimizes memory usage
+fastReruns = true
+enforceSerializableSessionState = false
+
+[logger]
+level = "info"
+messageFormat = "%(asctime)s %(message)s"
