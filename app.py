@@ -176,7 +176,6 @@ def main():
 
             st.markdown("#### 📚 Sources")
 
-            # if "sources": [] is empty, dont render tabs
             if not results["sources"]:
                 st.warning("⚠️ No sources found for this query.")
 
