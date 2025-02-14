@@ -9,6 +9,9 @@ from haystack.components.embedders import SentenceTransformersTextEmbedder
 from haystack.components.generators import OpenAIGenerator
 from haystack.components.rankers import TransformersSimilarityRanker
 from haystack.utils import ComponentDevice, Secret
+from haystack_integrations.components.generators.google_ai import (
+    GoogleAIGeminiGenerator,
+)
 from haystack_integrations.components.retrievers.qdrant import QdrantEmbeddingRetriever
 
 from config import DocumentProcessingConfig
@@ -32,9 +35,8 @@ class QueryEngine:
         You are an expert in the subject matter.
         You provide answers based on the following context.
         Instructions:
-        - Answer the question truthfully using the information provided.
-        - If multiple documents contain relevant information, combine them to form a comprehensive answer.
-        - Do not use information outside of the provided sources.
+        - Answer the question truthfully using the information available to you.
+        - Do not use information outside of the provided documents or your own knowledge.
         - If no relevant information is found, state that directly.
         - Given these documents, answer the question.\nDocuments:
             {% for doc in documents %}
@@ -66,7 +68,13 @@ class QueryEngine:
                 ),
             ),
             ("prompt_builder", PromptBuilder(template=prompt_template)),
-            ("llm", OpenAIGenerator(api_key=Secret.from_env_var("OPENAI_API_KEY"))),
+            (
+                "llm",
+                GoogleAIGeminiGenerator(
+                    model="gemini-2.0-flash",
+                    api_key=Secret.from_env_var("GEMINI_API_KEY"),
+                ),
+            ),
             ("answer_builder", AnswerBuilder()),
         ]
 
@@ -78,8 +86,7 @@ class QueryEngine:
         self.pipeline.connect("retriever.documents", "ranker.documents")
         self.pipeline.connect("retriever", "prompt_builder.documents")
         self.pipeline.connect("prompt_builder", "llm")
-        self.pipeline.connect("llm.replies", "answer_builder.replies")
-        self.pipeline.connect("llm.meta", "answer_builder.meta")
+        self.pipeline.connect("llm", "answer_builder")
         self.pipeline.connect("retriever", "answer_builder.documents")
 
     def _process_context(self, context) -> Dict[str, Any]:
