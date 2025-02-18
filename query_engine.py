@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Any, Dict
 
 import torch
-from docling.chunking import DocChunk
 from haystack import Pipeline
 from haystack.components.builders import AnswerBuilder, PromptBuilder
 from haystack.components.embedders import SentenceTransformersTextEmbedder
@@ -32,19 +31,26 @@ class QueryEngine:
 
     def _setup_pipeline(self):
         prompt_template = """
-        You are an expert in the subject matter.
+        You are an expert in Islamic texts and literature.
         You provide answers based on the following context.
         Instructions:
-        - Answer the question truthfully using the information available to you.
-        - Do not use information outside of the provided documents or your own knowledge.
+        - Answer the question truthfully using the information available in the provided documents.
+        - Do not use information outside of the provided documents.
         - If no relevant information is found, state that directly.
-        - Given these documents, answer the question.\nDocuments:
-            {% for doc in documents %}
-                {{ doc.content }}
-            {% endfor %}
+        - When referencing specific texts, include both the title and author.
+        - Always cite your sources clearly.
+        - Given these documents, answer the question.
 
-            \nQuestion: {{query}}
-            \nAnswer:
+        Documents:
+        {% for doc in documents %}
+            Title: {{ doc.meta.title }}
+            Author: {{ doc.meta.author }}
+            Content: {{ doc.content }}
+            ---
+        {% endfor %}
+
+        Question: {{query}}
+        Answer:
         """
 
         components = [
@@ -99,6 +105,9 @@ class QueryEngine:
             "page": context.meta.get("page_number", 1),
             "score": context.score if hasattr(context, "score") else 0.0,
             "content": context.content,
+            "title": context.meta.get("title", ""),
+            "author": context.meta.get("author", ""),
+            "language": context.meta.get("language", ""),
         }
 
     def query(self, query: str, filters: dict = None) -> Dict[str, Any]:

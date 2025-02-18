@@ -17,6 +17,8 @@ def initialize_session():
     if "initialized" not in st.session_state:
         st.session_state.initialized = False
         st.session_state.unique_authors = []
+        st.session_state.unique_languages = []
+        st.session_state.all_metadata = {}
 
         load_dotenv()
 
@@ -39,14 +41,19 @@ def initialize_session():
 
         documents_processed = processor.process_documents(path_config.data_dir)
 
-        authors_path = doc_config.tracking_dir / "authors.json"
-        if authors_path.exists():
-            with open(authors_path, "r") as f:
-                authors_data = json.load(f)
-                st.session_state.unique_authors = sorted(set(authors_data.values()))
+        metadata_path = doc_config.tracking_dir / "meta.json"
+        if metadata_path.exists():
+            with open(metadata_path, "r") as f:
+                metadata = json.load(f)
+                st.session_state.all_metadata = metadata
+                st.session_state.unique_authors = sorted(
+                    set(item["author"] for item in metadata.values())
+                )
+                st.session_state.unique_languages = sorted(
+                    set(item["language"] for item in metadata.values())
+                )
 
         st.session_state.initialized = True
-
         return documents_processed
 
 
@@ -77,9 +84,17 @@ def display_source_information(source, path_config):
     """Display source information in an organized manner"""
     if source:
         st.markdown("### 📄 Source Details")
+
+        metadata = st.session_state.all_metadata.get(source["source"], {})
+        title = metadata.get("title", source["source"])
+        author = metadata.get("author", "Unknown")
+        language = metadata.get("language", "Unknown")
+
         st.info(
             f"""
-            **Document:** {source['source']}  
+            **Title:** {title}  
+            **Author:** {author}  
+            **Language:** {language}  
             **Page:** {source['page']}  
             **Relevance Score:** {source['score']:.4f}
             """
@@ -127,16 +142,27 @@ def main():
         st.markdown("## 📚 Filters")
 
         selected_authors = st.multiselect(
-            "Select Authors:",
+            "Select authors:",
             options=st.session_state.unique_authors,
             key="author_filter",
-            help="Filter results by specific authors. Leave empty to show all.",
+            help="Filter results by specific authors.",
         )
 
-        if docs_processed:
-            st.success("New or modified documents have been processed!")
-        else:
-            st.info("No document changes detected.")
+        if not selected_authors:
+            st.warning("Note: All sources would be used if no author is selected")
+
+        selected_languages = st.multiselect(
+            "Select languages:",
+            options=st.session_state.unique_languages,
+            key="language_filter",
+            help="Filter results by languages.",
+            default=["English"],
+        )
+
+        # if docs_processed:
+        #     st.success("New or modified documents have been processed!")
+        # else:
+        #     st.info("No document changes detected.")
 
         st.markdown("### ℹ️ About")
         st.markdown(
@@ -144,7 +170,8 @@ def main():
             This application allows you to search through Islamic texts 
             and receive relevant information from verified sources.
             
-            Use the search bar above to ask questions or explore topics.
+            Simply enter your question and use the `🔍 Search` button
+            to get answers. You can also filter the results by authors and languages.
             """
         )
 
@@ -159,17 +186,38 @@ def main():
 
     if submit_button and query:
         with st.spinner("Searching through texts..."):
-            filters = None
+            filters = []
             if selected_authors:
-                filters = {
-                    "field": "meta.author",
-                    "operator": "in",
-                    "value": selected_authors,
-                }
+                filters.append(
+                    {
+                        "field": "meta.author",
+                        "operator": "in",
+                        "value": selected_authors,
+                    }
+                )
+            if selected_languages:
+                filters.append(
+                    {
+                        "field": "meta.language",
+                        "operator": "in",
+                        "value": selected_languages,
+                    }
+                )
+
+            combined_filters = None
+            if filters:
+                if len(filters) > 1:
+                    combined_filters = {
+                        "operator": "AND",
+                        "conditions": filters,
+                    }
+                else:
+                    combined_filters = filters[0]
+
             query_engine = QueryEngine(
                 st.session_state.processor.store, st.session_state.doc_config
             )
-            results = query_engine.query(query, filters)
+            results = query_engine.query(query, combined_filters)
 
             st.markdown("#### 📝 Answer")
             st.write(results["answer"])
@@ -178,7 +226,6 @@ def main():
 
             if not results["sources"]:
                 st.warning("⚠️ No sources found for this query.")
-
             else:
                 tabs = st.tabs(["Source 1", "Source 2", "Source 3"])
 

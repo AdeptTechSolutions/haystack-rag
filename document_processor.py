@@ -22,12 +22,13 @@ from haystack_integrations.document_stores.qdrant import QdrantDocumentStore
 from qdrant_client import QdrantClient
 
 from config import DocumentProcessingConfig
+from pymupdf_component import PyMuPDFToDocument
 
 
 @component
 class MetadataEnricher:
-    def __init__(self, authors: Dict[str, str]):
-        self.authors = authors
+    def __init__(self, metadata_dict: Dict[str, Dict[str, str]]):
+        self.metadata_dict = metadata_dict
 
     @component.output_types(documents=List[Document])
     def run(self, documents: List[Document]):
@@ -35,9 +36,11 @@ class MetadataEnricher:
             file_path = doc.meta.get("file_path")
             if file_path:
                 filename = Path(file_path).name
-                author = self.authors.get(filename)
-                if author:
-                    doc.meta["author"] = author
+                metadata = self.metadata_dict.get(filename)
+                if metadata:
+                    doc.meta["author"] = metadata["author"]
+                    doc.meta["title"] = metadata["title"]
+                    doc.meta["language"] = metadata["language"]
         return {"documents": documents}
 
 
@@ -55,7 +58,7 @@ class DocumentProcessor:
     def __init__(self, config: DocumentProcessingConfig):
         self.config = config
         self.document_store = self._initialize_document_store()
-        self.authors = self._load_authors()
+        self.metadata_dict = self._load_metadata()
         self._setup_pipeline()
         self.file_tracking_path = Path("./.tracking") / "file_tracking.json"
         self.file_tracking_path.parent.mkdir(parents=True, exist_ok=True)
@@ -71,7 +74,6 @@ class DocumentProcessor:
         collection_exists = any(col.name == collection_name for col in collections)
 
         store = QdrantDocumentStore(
-            # path=self.config.cache_dir,
             url=qdrant_url,
             api_key=Secret.from_env_var("QDRANT_API_KEY"),
             index=collection_name,
@@ -96,9 +98,9 @@ class DocumentProcessor:
             ),
             ("text_converter", TextFileToDocument()),
             ("markdown_converter", MarkdownToDocument()),
-            ("pdf_converter", PyPDFToDocument()),
+            ("pdf_converter", PyMuPDFToDocument()),
             ("joiner", DocumentJoiner()),
-            ("enricher", MetadataEnricher(authors=self.authors)),
+            ("enricher", MetadataEnricher(metadata_dict=self.metadata_dict)),
             ("cleaner", DocumentCleaner()),
             (
                 "splitter",
@@ -113,7 +115,7 @@ class DocumentProcessor:
                 SentenceTransformersDocumentEmbedder(
                     model=self.config.embedding_model,
                     device=get_device(),
-                    meta_fields_to_embed=["author"],
+                    meta_fields_to_embed=["author", "title", "language"],
                 ),
             ),
             ("writer", DocumentWriter(self.document_store)),
@@ -176,10 +178,11 @@ class DocumentProcessor:
 
         return changed_files
 
-    def _load_authors(self) -> Dict[str, str]:
-        authors_path = self.config.tracking_dir / "authors.json"
-        if authors_path.exists():
-            with open(authors_path, "r") as f:
+    def _load_metadata(self) -> Dict[str, Dict[str, str]]:
+        """Load the metadata information from meta.json"""
+        metadata_path = self.config.tracking_dir / "meta.json"
+        if metadata_path.exists():
+            with open(metadata_path, "r") as f:
                 return json.load(f)
         return {}
 
