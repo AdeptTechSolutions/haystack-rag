@@ -77,7 +77,8 @@ def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
 def get_pdf_download_link(filename: str) -> str:
     """Generate the download link for the full PDF."""
     base_url = "https://raw.githubusercontent.com/AdeptTechSolutions/haystack-rag/refs/heads/main/data/"
-    return f"{base_url}{filename}"
+    normalized_filename = filename.replace("\\", "/")
+    return f"{base_url}{normalized_filename}"
 
 
 def display_source_information(source, path_config):
@@ -104,7 +105,9 @@ def display_source_information(source, path_config):
             st.markdown(source["content"])
 
             st.markdown("#### 📑 Page Preview")
-            pdf_path = path_config.data_dir / source["source"]
+            pdf_path = Path(
+                str(path_config.data_dir / source["source"]).replace("\\", "/")
+            )
 
             col1, col2, col3 = st.columns([1, 1.5, 1])
             with col2:
@@ -115,7 +118,7 @@ def display_source_information(source, path_config):
                 )
 
                 download_link = get_pdf_download_link(source["source"])
-                st.markdown(f"[📥 Download Complete PDF]({download_link})")
+                st.markdown(f"📥  [Download Complete PDF]({download_link})")
     else:
         st.warning("⚠️ No source information available for this result.")
 
