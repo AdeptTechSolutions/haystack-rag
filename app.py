@@ -59,7 +59,13 @@ def initialize_session():
 
 def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
     try:
-        doc = fitz.open(pdf_path)
+        pdf_path_str = str(pdf_path).replace("\\", "/")
+
+        if not Path(pdf_path_str).exists():
+            st.error(f"PDF file not found: {pdf_path_str}")
+            return
+
+        doc = fitz.open(pdf_path_str)
         page = doc[page_num - 1]
         pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))
 
@@ -72,13 +78,20 @@ def display_pdf_page(pdf_path: Path, page_num: int, temp_dir: Path):
         doc.close()
     except Exception as e:
         st.error(f"Error displaying PDF page: {str(e)}")
+        import traceback
+
+        st.sidebar.code(traceback.format_exc())
 
 
 def get_pdf_download_link(filename: str) -> str:
-    """Generate the download link for the full PDF."""
+    """Generate the download link for the full PDF.
+
+    Args:
+        filename: Just the filename without path prefixes
+    """
     base_url = "https://raw.githubusercontent.com/AdeptTechSolutions/haystack-rag/refs/heads/main/data/"
-    normalized_filename = filename.replace("\\", "/")
-    return f"{base_url}{normalized_filename}"
+    clean_filename = filename.split("/")[-1] if "/" in filename else filename
+    return f"{base_url}{clean_filename}"
 
 
 def display_source_information(source, path_config):
@@ -88,12 +101,6 @@ def display_source_information(source, path_config):
 
         source_path = source["source"].replace("\\", "/")
         filename = source_path.split("/")[-1] if "/" in source_path else source_path
-
-        st.sidebar.markdown("### Debug Info (Hidden in production)")
-        st.sidebar.code(f"Source path: {source_path}\nExtracted filename: {filename}")
-        st.sidebar.code(
-            f"Available metadata keys: {list(st.session_state.all_metadata.keys())[:5]}..."
-        )
 
         metadata = st.session_state.all_metadata.get(filename, {})
         title = metadata.get("title", filename)
@@ -114,8 +121,7 @@ def display_source_information(source, path_config):
             st.markdown(source["content"])
 
             st.markdown("#### 📑 Page Preview")
-            normalized_source = source["source"].replace("\\", "/")
-            pdf_path = path_config.data_dir / normalized_source
+            pdf_path = path_config.data_dir / filename
 
             col1, col2, col3 = st.columns([1, 1.5, 1])
             with col2:
@@ -125,7 +131,7 @@ def display_source_information(source, path_config):
                     path_config.temp_dir,
                 )
 
-                download_link = get_pdf_download_link(normalized_source)
+                download_link = get_pdf_download_link(filename)
                 st.markdown(f"📥  [Download Complete PDF]({download_link})")
     else:
         st.warning("⚠️ No source information available for this result.")
