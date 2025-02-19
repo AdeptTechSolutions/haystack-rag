@@ -86,8 +86,10 @@ def display_source_information(source, path_config):
     if source:
         st.markdown("### 📄 Source Details")
 
-        metadata = st.session_state.all_metadata.get(source["source"], {})
-        title = metadata.get("title", source["source"])
+        normalized_filename = source["source"].replace("\\", "/")
+
+        metadata = st.session_state.all_metadata.get(normalized_filename, {})
+        title = metadata.get("title", normalized_filename)
         author = metadata.get("author", "Unknown")
         language = metadata.get("language", "Unknown")
 
@@ -105,7 +107,8 @@ def display_source_information(source, path_config):
             st.markdown(source["content"])
 
             st.markdown("#### 📑 Page Preview")
-            pdf_path = path_config.data_dir / source["source"]
+            normalized_source = source["source"].replace("\\", "/")
+            pdf_path = path_config.data_dir / normalized_source
 
             col1, col2, col3 = st.columns([1, 1.5, 1])
             with col2:
@@ -115,7 +118,7 @@ def display_source_information(source, path_config):
                     path_config.temp_dir,
                 )
 
-                download_link = get_pdf_download_link(source["source"])
+                download_link = get_pdf_download_link(normalized_source)
                 st.markdown(f"📥  [Download Complete PDF]({download_link})")
     else:
         st.warning("⚠️ No source information available for this result.")
