@@ -105,9 +105,7 @@ def display_source_information(source, path_config):
             st.markdown(source["content"])
 
             st.markdown("#### 📑 Page Preview")
-            pdf_path = Path(
-                str(path_config.data_dir / source["source"]).replace("\\", "/")
-            )
+            pdf_path = path_config.data_dir / source["source"]
 
             col1, col2, col3 = st.columns([1, 1.5, 1])
             with col2:
