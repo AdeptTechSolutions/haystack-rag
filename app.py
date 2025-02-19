@@ -86,10 +86,17 @@ def display_source_information(source, path_config):
     if source:
         st.markdown("### 📄 Source Details")
 
-        normalized_filename = source["source"].replace("\\", "/")
+        source_path = source["source"].replace("\\", "/")
+        filename = source_path.split("/")[-1] if "/" in source_path else source_path
 
-        metadata = st.session_state.all_metadata.get(normalized_filename, {})
-        title = metadata.get("title", normalized_filename)
+        st.sidebar.markdown("### Debug Info (Hidden in production)")
+        st.sidebar.code(f"Source path: {source_path}\nExtracted filename: {filename}")
+        st.sidebar.code(
+            f"Available metadata keys: {list(st.session_state.all_metadata.keys())[:5]}..."
+        )
+
+        metadata = st.session_state.all_metadata.get(filename, {})
+        title = metadata.get("title", filename)
         author = metadata.get("author", "Unknown")
         language = metadata.get("language", "Unknown")
 
