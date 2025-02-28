@@ -32,8 +32,9 @@ class QueryEngine:
     def _setup_pipeline(self):
         prompt_template = """
         You are an expert in Islamic texts and literature.
-        You provide comprehensive and detailed answers based on the following context.
-        
+        You provide comprehensive and detailed answers based on the following context. Your response must be at least one full page in length (at least 500 words or more).
+
+
         Instructions:
         - Answer the question thoroughly and in detail using the information available in the provided documents.
         - Provide comprehensive explanations that include relevant historical context, interpretations, and significance.
@@ -45,7 +46,7 @@ class QueryEngine:
         - If no relevant information is found, state that directly.
         - When referencing specific texts, include both the title and author.
         - Always cite your sources clearly, specifying which document each piece of information comes from.
-        - Given these documents, answer the question in a scholarly and detailed manner.
+        - Ensure that your response is formatted and detailed enough to completely fill one full page.
 
         Documents:
         {% for doc in documents %}
@@ -56,7 +57,7 @@ class QueryEngine:
         {% endfor %}
 
         Question: {{query}}
-        
+
         Detailed Answer:
         """
 
