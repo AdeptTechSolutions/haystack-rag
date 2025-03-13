@@ -11,6 +11,8 @@ class DocumentProcessingConfig:
     ranker_model: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
     cache_dir: Path = Path(".document_cache")
     tracking_dir: Path = Path(".tracking")
+    meta_data_file: Path = Path(".tracking/new_articles.json")
+
     top_k: int = 10
 
 

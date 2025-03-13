@@ -180,7 +180,7 @@ class DocumentProcessor:
 
     def _load_metadata(self) -> Dict[str, Dict[str, str]]:
         """Load the metadata information from meta.json"""
-        metadata_path = self.config.tracking_dir / "meta.json"
+        metadata_path = self.config.meta_data_file
         if metadata_path.exists():
             with open(metadata_path, "r") as f:
                 return json.load(f)

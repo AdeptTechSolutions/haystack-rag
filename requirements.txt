@@ -1,7 +1,7 @@
 haystack-ai
 google-ai-haystack
 qdrant-haystack
-docling-haystack
+# docling-haystack
 sentence-transformers>=3.0.0 
 huggingface_hub>=0.23.0
 markdown-it-py 
