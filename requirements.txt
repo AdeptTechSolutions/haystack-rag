@@ -14,3 +14,5 @@ pdfminer.six
 streamlit
 trulens
 trulens-providers-openai
+fitz
+python-dotenv
